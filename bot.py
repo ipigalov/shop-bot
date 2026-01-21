@@ -1,4 +1,5 @@
 
+import os
 import telebot
 from telebot import types
 import requests
@@ -7,6 +8,8 @@ import random
 from datetime import datetime
 from threading import Thread
 import time
+from flask import Flask
+
 
 # --- КОНФИГУРАЦИЯ ---
 BOT_TOKEN = '8401742790:AAECk0oEsrI4TgLsRGmKAFmxt2fZbYarINI'
@@ -353,6 +356,25 @@ def handle_group(message):
         markup.add(types.InlineKeyboardButton(text="Перейти в бот", url=f"https://t.me/{BOT_USERNAME}"))
         bot.reply_to(message, "Для заказа перейдите в личные сообщения:", reply_markup=markup)
 
+# --- ВЕБ-СЕРВЕР ДЛЯ RENDER ---
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "I am alive!"
+
+def run_http():
+    # Магия здесь: берем порт от Render или используем 8080 по умолчанию
+    port = int(os.environ.get("PORT", 8080))
+    
+    # Запускаем сервер
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run_http)
+    t.start()
+
+keep_alive() # Запускаем сервер в фоновом потоке
 
 print("Бот готов к работе!")
 bot.infinity_polling()
