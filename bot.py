@@ -28,10 +28,16 @@ def get_products_from_google():
     try:
         response = requests.get(GOOGLE_SCRIPT_URL, timeout=5)
         if response.status_code == 200:
-            return response.json()
+            data = response.json()
+            # --- ОТЛАДКА ---
+            print("📦 ДАННЫЕ ОТ ГУГЛА:", data) 
+            # Вы увидите в консоли: [{'name': 'Пицца', 'price': 600, 'stock': 5}, ...]
+            # Если 'stock' нет — значит вы не обновили скрипт (Шаг 2).
+            # ----------------
+            return data
         return []
     except Exception as e:
-        print(f"Ошибка получения товаров: {e}")
+        print(f"Ошибка: {e}")
         return []
 
 def find_product_info(short_name):
