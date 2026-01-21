@@ -257,13 +257,29 @@ def handle_catalog_clicks(call):
 # ==========================================
 
 def save_quantity(message):
-    user_id = message.chat.id
-    text = message.text
-    if text == '/start': start_private(message); return
+        user_id = message.chat.id
     
-    if not text.isdigit():
-        msg = bot.send_message(user_id, "Введите число цифрами:")
-        bot.register_next_step_handler(msg, save_quantity); return
+    # 1. Сначала проверяем, не решил ли пользователь перезапустить бота
+    # Проверяем content_type, чтобы не упасть, если прислан стикер
+    if message.content_type == 'text' and message.text == '/start': 
+        start_private(message)
+        return
+    
+    # 2. ГЛАВНАЯ ПРОВЕРКА ВВОДА
+    # Условие: "Если это НЕ текст" ИЛИ "Это текст, но НЕ цифры"
+    if message.content_type != 'text' or not message.text.isdigit():
+        msg = bot.send_message(
+            user_id, 
+            "⚠️ **Некорректный ввод!**\n\n"
+            "Я не понимаю стикеры, картинки или буквы.\n"
+            "Пожалуйста, введите количество товара **числом** (например: 1, 2, 10):",
+            parse_mode="Markdown"
+        )
+        # Обязательно возвращаем пользователя на этот же шаг
+        bot.register_next_step_handler(msg, save_quantity)
+        return
+
+    # 3. Если мы здесь, значит это точно число
 
     qty = int(text)
     
