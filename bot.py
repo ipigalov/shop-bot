@@ -516,7 +516,7 @@ keep_alive() # Запускаем сервер в фоновом потоке
 # ==========================================
 
 def send_stock_report_to_group(chat_id):
-    bot.send_message(chat_id, "⏳ Загружаю данные со склада...")
+    bot.send_message(chat_id, "⏳ Загружаю данные по остаткам товаров...")
     products = get_products_from_google()
     
     if not products:
@@ -535,7 +535,7 @@ def send_stock_report_to_group(chat_id):
         
         report_lines.append(f"{icon} {name}: **{stock} шт.**")
         
-    report_text = "📦 **СКЛАД НА ТЕКУЩИЙ МОМЕНТ:**\n\n" + "\n".join(report_lines)
+    report_text = "📦 **ДОСТУПНЫЕ К ЗАКАЗУ ОСТАТКИ НА ТЕКУЩИЙ МОМЕНТ:**\n\n" + "\n".join(report_lines)
     
     bot.send_message(chat_id, report_text, parse_mode="Markdown")
 print("Бот готов к работе!")
