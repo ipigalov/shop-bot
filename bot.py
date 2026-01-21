@@ -76,22 +76,35 @@ def save_fio_and_show_catalog(message):
 def show_product_catalog(chat_id, text_message):
     products_list = get_products_from_google()
     
+   # Пытаемся получить данные
+    products_list = get_products_from_google()
+    
+    # ЕСЛИ ОШИБКА (список пуст)
     if not products_list:
-        bot.send_message(chat_id, "⚠️ Ошибка загрузки прайс-листа.")
+        markup = types.InlineKeyboardMarkup()
+        # Кнопка повтора
+        btn_retry = types.InlineKeyboardButton("🔄 Попробовать снова", callback_data="retry_catalog")
+        markup.add(btn_retry)
+        
+        bot.send_message(
+            chat_id, 
+            "⚠️ **Не удалось загрузить прайс-лист.**\nGoogle Таблицы долго отвечают. Попробуйте нажать кнопку ниже:", 
+            reply_markup=markup,
+            parse_mode="Markdown"
+        )
         return
 
+    # ЕСЛИ ВСЕ ХОРОШО - Строим меню как обычно
     markup = types.InlineKeyboardMarkup(row_width=1)
     
-    # Кнопки товаров
     for item in products_list:
         name = item['name']
         price = item['price']
-        short_name = name[:20] # Обрезаем для callback_data
-        
+        short_name = name[:20]
         btn_text = f"{name} — {price}₽"
         markup.add(types.InlineKeyboardButton(text=btn_text, callback_data=f"add|{short_name}"))
     
-    # Сборка текста корзины ПРЯМО ЗДЕСЬ
+    # Кнопки корзины
     cart = user_data[chat_id].get('cart', {})
     total_sum = 0
     cart_lines = []
@@ -104,7 +117,6 @@ def show_product_catalog(chat_id, text_message):
             total_sum += line_sum
             cart_lines.append(f"▫️ {p_name}: {qty} шт. x {price} = {line_sum}₽")
         
-        # Кнопки управления
         markup.add(types.InlineKeyboardButton(text=f"✅ Оформить ({total_sum}₽)", callback_data="checkout"))
         markup.add(types.InlineKeyboardButton(text="✏️ Ред. корзину", callback_data="edit_cart_menu"))
         markup.add(types.InlineKeyboardButton(text="🗑 Очистить", callback_data="clear_cart"))
@@ -138,8 +150,24 @@ def show_edit_menu(chat_id):
 @bot.callback_query_handler(func=lambda call: True)
 def handle_catalog_clicks(call):
     chat_id = call.message.chat.id
+
+ # --- НОВОЕ: ОБРАБОТКА КНОПКИ ПОВТОРА КАТАЛОГА ---
+    if call.data == "retry_catalog":
+        # Показываем юзеру, что бот принял нажатие
+        bot.answer_callback_query(call.id, "Пробую загрузить еще раз...")
+        
+        # Удаляем сообщение с ошибкой, чтобы было красиво
+        try: bot.delete_message(chat_id, call.message.message_id)
+        except: pass
+        
+        # Снова вызываем функцию показа каталога
+        # Она сама попробует скачать данные еще раз
+        bot.send_message(chat_id, "🔄 Попытка связи с базой данных...")
+        show_product_catalog(chat_id, "👇 Каталог товаров:")
+        return
+    # ------------------------------------------------
     
-    # Обработка кнопки ПОВТОРА (если была ошибка)
+     # --- НОВОЕ: ОБРАБОТКА ПОВТОРА ОТПРАВКИ (если есть) ---
     if call.data == "retry_checkout":
         try: bot.delete_message(chat_id, call.message.message_id) 
         except: pass
@@ -190,6 +218,10 @@ def handle_catalog_clicks(call):
             
             msg = bot.send_message(chat_id, f"Введите количество для **{full_product['name']}**:", parse_mode="Markdown")
             bot.register_next_step_handler(msg, save_quantity)
+        else:
+            # Если товар не найден (возможно, прайс не загрузился), тоже предложим повторить
+            bot.answer_callback_query(call.id, "Ошибка товара. Попробуйте обновить.")
+            show_product_catalog(chat_id, "Обновите каталог:")
 
     elif call.data.startswith("mod|"):
         short_name = call.data.split("|")[1]
