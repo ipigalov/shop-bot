@@ -15,6 +15,8 @@ from flask import Flask
 BOT_TOKEN = '8401742790:AAECk0oEsrI4TgLsRGmKAFmxt2fZbYarINI'
 GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxJENHWAYrSPN4129lK4IRuUbaeFwO6sFNEHlpLliWgkDGp2kySFCadi8ipqIviwN_W3w/exec'
 BOT_USERNAME = '@SD_OrderShopBot'
+# Вставьте сюда полученный ID (обязательно с минусом, если он есть)
+GROUP_CHAT_ID = -1003663977691 
 
 bot = telebot.TeleBot(BOT_TOKEN)
 user_data = {} 
@@ -432,13 +434,27 @@ def ask_to_retry(chat_id):
         reply_markup=markup, parse_mode="Markdown"
     )
 
-# --- ГРУППА ---
+# ==========================================
+# ОБРАБОТКА СООБЩЕНИЙ В ГРУППЕ
+# ==========================================
 @bot.message_handler(func=lambda message: message.chat.type in ['group', 'supergroup'])
-def handle_group(message):
+def handle_group_logic(message):
+    # 1. Если нажали "Запросить остатки" или ввели команду
+    if message.text == "📊 Актуальные остатки" or message.text == "/stock":
+        send_stock_report_to_group(message.chat.id)
+        return
+
+    # 2. Если пишут "Заказ" - отправляем в личку (старая логика)
     if message.text.lower().startswith('заказ') or message.text.startswith('/start'):
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton(text="Перейти в бот", url=f"https://t.me/{BOT_USERNAME}"))
-        bot.reply_to(message, "Для заказа перейдите в личные сообщения:", reply_markup=markup)
+        markup.add(types.InlineKeyboardButton(text="➡️ Перейдите в бот", url=f"https://t.me/{BOT_USERNAME}"))
+        bot.reply_to(message, "Для оформления заказа перейдите в личные сообщения:", reply_markup=markup)
+
+    # 3. Если админ пишет /menu, показываем клавиатуру в группе
+    if message.text == "/menu":
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        markup.add(types.KeyboardButton("📊 Актуальные остатки"))
+        bot.send_message(message.chat.id, "Меню администратора:", reply_markup=markup)
 
 # --- ВЕБ-СЕРВЕР ДЛЯ RENDER ---
 app = Flask('')
@@ -460,5 +476,32 @@ def keep_alive():
 
 keep_alive() # Запускаем сервер в фоновом потоке
 
+# ==========================================
+# СООБЩЕНИЕ ОБ ОСТАТКАХ В ГРУППЕ
+# ==========================================
+
+def send_stock_report_to_group(chat_id):
+    bot.send_message(chat_id, "⏳ Загружаю данные со склада...")
+    products = get_products_from_google()
+    
+    if not products:
+        bot.send_message(chat_id, "⚠️ Ошибка получения данных.")
+        return
+
+    report_lines = []
+    for p in products:
+        name = p['name']
+        stock = p.get('stock', 0)
+        
+        # Ставим значок в зависимости от количества
+        icon = "🟢"
+        if stock < 5: icon = "🟡"
+        if stock == 0: icon = "🔴"
+        
+        report_lines.append(f"{icon} {name}: **{stock} шт.**")
+        
+    report_text = "📦 **СКЛАД НА ТЕКУЩИЙ МОМЕНТ:**\n\n" + "\n".join(report_lines)
+    
+    bot.send_message(chat_id, report_text, parse_mode="Markdown")
 print("Бот готов к работе!")
 bot.infinity_polling()
