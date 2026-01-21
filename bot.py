@@ -38,7 +38,7 @@ def find_product_info(short_name):
     all_products = get_products_from_google()
     for p in all_products:
         if p['name'].startswith(short_name):
-            return p
+            return p # Теперь тут внутри есть ключ 'stock'
     return None
 
 # ==========================================
@@ -207,21 +207,32 @@ def handle_catalog_clicks(call):
         except: pass
         show_product_catalog(chat_id, "Каталог:")
 
-    elif call.data.startswith("add|"):
+   elif call.data.startswith("add|"):
         short_name = call.data.split("|")[1]
         full_product = find_product_info(short_name)
         
         if full_product:
+            # Получаем остаток из Гугла
+            stock = full_product.get('stock', 999) # 999 на случай ошибки
+            
             user_data[chat_id]['current_product'] = full_product['name']
             user_data[chat_id]['current_price'] = full_product['price']
+            user_data[chat_id]['max_qty'] = stock  # <--- ЗАПОМИНАЕМ ЛИМИТ
             user_data[chat_id]['mode'] = 'add'
             
-            msg = bot.send_message(chat_id, f"Введите количество для **{full_product['name']}**:", parse_mode="Markdown")
+            msg = bot.send_message(
+                chat_id, 
+                f"Товар: **{full_product['name']}**\n"
+                f"Цена: {full_product['price']}₽\n"
+                f"Доступно на складе: **{stock} шт.**\n\n"
+                f"Введите количество:", 
+                parse_mode="Markdown"
+            )
             bot.register_next_step_handler(msg, save_quantity)
         else:
-            # Если товар не найден (возможно, прайс не загрузился), тоже предложим повторить
-            bot.answer_callback_query(call.id, "Ошибка товара. Попробуйте обновить.")
-            show_product_catalog(chat_id, "Обновите каталог:")
+            bot.answer_callback_query(call.id, "Товар закончился или недоступен.")
+            # Обновляем каталог, чтобы убрать товар
+            show_product_catalog(chat_id, "Каталог обновлен:")
 
     elif call.data.startswith("mod|"):
         short_name = call.data.split("|")[1]
@@ -248,15 +259,48 @@ def save_quantity(message):
     if text == '/start': start_private(message); return
     
     if not text.isdigit():
-        msg = bot.send_message(user_id, "Введите число:")
+        msg = bot.send_message(user_id, "⚠️ Введите число цифрами:")
         bot.register_next_step_handler(msg, save_quantity); return
 
     qty = int(text)
+    
+    # Достаем сохраненные данные
     product = user_data[user_id]['current_product']
     price = user_data[user_id]['current_price']
+    max_qty = user_data[user_id].get('max_qty', 999) # Достаем лимит
     mode = user_data[user_id].get('mode', 'add')
     cart = user_data[user_id]['cart']
     
+    # --- ПРОВЕРКА НАЛИЧИЯ (НОВОЕ) ---
+    
+    # Считаем, сколько пользователь УЖЕ положил в корзину ранее
+    already_in_cart = 0
+    if product in cart and mode == 'add': 
+        # Если добавляем к существующему, нужно учитывать старое значение
+        already_in_cart = cart[product]['qty']
+        
+    # Итоговое количество, которое хочет получить пользователь
+    total_wanted = qty if mode == 'edit' else (qty + already_in_cart)
+    
+    if total_wanted > max_qty:
+        # Если хочет больше, чем есть
+        available_now = max_qty - already_in_cart
+        if available_now < 0: available_now = 0
+        
+        msg = bot.send_message(
+            user_id, 
+            f"❌ **Недостаточно товара на складе!**\n\n"
+            f"Всего доступно: {max_qty} шт.\n"
+            f"У вас в корзине уже: {already_in_cart} шт.\n"
+            f"Вы можете заказать еще не более: **{available_now} шт.**\n\n"
+            f"Введите меньшее количество:",
+            parse_mode="Markdown"
+        )
+        bot.register_next_step_handler(msg, save_quantity)
+        return
+    # -------------------------------
+
+    # Если проверка пройдена - сохраняем
     if mode == 'edit':
         if qty == 0:
             if product in cart: del cart[product]
@@ -266,11 +310,12 @@ def save_quantity(message):
     else:
         if product in cart:
             cart[product]['qty'] += qty
+            # Цену обновляем
             cart[product]['price'] = price 
         else:
             cart[product] = {'qty': qty, 'price': price}
-        show_product_catalog(user_id, f"✅ Добавлено: {product}")
-
+            
+        show_product_catalog(user_id, f"✅ Добавлено: {product} ({qty} шт.)")
 # ==========================================
 # 5. ПОДТВЕРЖДЕНИЕ И ОТПРАВКА
 # ==========================================
