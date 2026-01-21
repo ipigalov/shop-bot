@@ -257,29 +257,40 @@ def handle_catalog_clicks(call):
 # ==========================================
 
 def save_quantity(message):
-        user_id = message.chat.id
+            user_id = message.chat.id
     
-    # 1. Сначала проверяем, не решил ли пользователь перезапустить бота
-    # Проверяем content_type, чтобы не упасть, если прислан стикер
-    if message.content_type == 'text' and message.text == '/start': 
+    # --- ЗАЩИТА ОТ СТИКЕРОВ, ГИФОК И ФОТО ---
+    # Если сообщение не текстовое (content_type != 'text') 
+    # ИЛИ если по какой-то причине текста нет (is None)
+    if message.content_type != 'text' or message.text is None:
+        msg = bot.send_message(
+            user_id, 
+            "⛔️ **Я не понимаю этот формат.**\n"
+            "Стикеры, гифки и картинки я читать не умею.\n\n"
+            "Пожалуйста, просто напишите **цифру** на клавиатуре:",
+            parse_mode="Markdown"
+        )
+        # ВАЖНО: Снова активируем ожидание ввода!
+        bot.register_next_step_handler(msg, save_quantity)
+        return
+    # ----------------------------------------
+
+    # Теперь мы уверены, что это текст. Проверяем команду старт.
+    if message.text == '/start': 
         start_private(message)
         return
     
-    # 2. ГЛАВНАЯ ПРОВЕРКА ВВОДА
-    # Условие: "Если это НЕ текст" ИЛИ "Это текст, но НЕ цифры"
-    if message.content_type != 'text' or not message.text.isdigit():
+    # Проверяем, что текст состоит только из цифр
+    if not message.text.isdigit():
         msg = bot.send_message(
             user_id, 
-            "⚠️ **Некорректный ввод!**\n\n"
-            "Я не понимаю стикеры, картинки или буквы.\n"
-            "Пожалуйста, введите количество товара **числом** (например: 1, 2, 10):",
-            parse_mode="Markdown"
+            "⚠️ **Это не число.**\n"
+            "Пожалуйста, введите количество цифрами (например: 1, 2, 5):"
         )
-        # Обязательно возвращаем пользователя на этот же шаг
         bot.register_next_step_handler(msg, save_quantity)
         return
 
-    # 3. Если мы здесь, значит это точно число
+    # --- ЕСЛИ ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ (ЭТО ЧИСЛО) ---
 
     qty = int(text)
     
