@@ -308,15 +308,18 @@ def save_quantity(message):
         if qty == 0:
             if product in cart: del cart[product]
         else:
-            cart[product] = {'qty': qty, 'price': price}
+            # ДОБАВИЛИ 'max_qty': max_qty
+            cart[product] = {'qty': qty, 'price': price, 'max_qty': max_qty}
         show_edit_menu(user_id)
     else:
         # Добавление
         if product in cart:
             cart[product]['qty'] += qty
-            cart[product]['price'] = price 
+            cart[product]['price'] = price
+            # max_qty не обновляем, он тот же
         else:
-            cart[product] = {'qty': qty, 'price': price}
+            # ДОБАВИЛИ 'max_qty': max_qty
+            cart[product] = {'qty': qty, 'price': price, 'max_qty': max_qty}
             
         show_product_catalog(user_id, f"✅ Добавлено: {product} ({qty} шт.)")
 # ==========================================
@@ -413,6 +416,32 @@ def send_to_google(message):
    		f" Следите за сообщениями в TГ группе РАСПРОДАЖИ СЕВЕРНАЯ ДОЛИНА и в БИТРИКС о дате и времени выдачи, а также о возможных изменениях!"
             )
             bot.send_message(user_id, final_message, parse_mode="Markdown")
+
+     # --- НОВОЕ: ПРОВЕРКА НА ОКОНЧАНИЕ ТОВАРА ---
+            try:
+                alert_text = ""
+                for name, data in cart.items():
+                    ordered_qty = data['qty']
+                    original_stock = data.get('max_qty', 999)
+                    
+                    # Логика: Если купили всё, что было (или больше)
+                    remaining = original_stock - ordered_qty
+                    
+                    if remaining <= 0:
+                        alert_text += f"🔴 **ЗАКОНЧИЛСЯ ТОВАР:** {name}\n"
+                    elif remaining < 3: # Можно добавить предупреждение если мало
+                        alert_text += f"🟡 **Заканчивается:** {name} (Ост: {remaining})\n"
+                
+                # Если есть о чем предупредить - пишем в ГРУППУ
+                if alert_text:
+                    full_alert = (f"⚡️ **ВНИМАНИЕ СКЛАД!**\n"
+                                  f"После заказа #{order_id}:\n\n"
+                                  f"{alert_text}")
+                    bot.send_message(GROUP_CHAT_ID, full_alert, parse_mode="Markdown")
+                    
+            except Exception as e:
+                print(f"Ошибка отправки алерта: {e}")
+            # -------------------------------------------
             
             del user_data[user_id]
             start_private(message)
