@@ -145,7 +145,7 @@ def show_edit_menu(chat_id):
         short_name = product_name[:20]
         markup.add(types.InlineKeyboardButton(text=f"📝 {product_name} ({qty} шт.)", callback_data=f"mod|{short_name}"))
         
-    markup.add(types.InlineKeyboardButton(text="🔙 Назад к списку товаров", callback_data="back_to_catalog"))
+    markup.add(types.InlineKeyboardButton(text="🔙 Назад в корзину", callback_data="back_to_catalog"))
     bot.send_message(chat_id, "Какой товар изменить?", reply_markup=markup)
 
 # ==========================================
