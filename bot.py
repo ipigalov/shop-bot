@@ -1,4 +1,4 @@
-
+import pytz
 import os
 import telebot
 from telebot import types
@@ -284,9 +284,15 @@ def send_to_google(message):
     try:
         fio = user_data[user_id]['fio']
         username = message.from_user.username or "-"
-        
-        # Дата и ID
-        now = datetime.now()
+
+
+      # Дата и ID
+# --- ИСПРАВЛЕНИЕ ВРЕМЕНИ (МОСКВА) ---
+        # Получаем часовой пояс Москвы
+        msk_tz = pytz.timezone('Europe/Moscow')
+        # Получаем текущее время сразу в нужном поясе
+        now = datetime.now(msk_tz)
+         
         date_str = now.strftime("%d.%m.%Y")
         time_str = now.strftime("%H:%M")
         full_date = f"{date_str} {time_str}"
@@ -321,7 +327,7 @@ def send_to_google(message):
             final_message = (
                 f"✅ **ЗАКАЗ ПОДТВЕРЖДЕН!**\n\n"
                 f"🔢 **Номер заказа:** `#{order_id}`\n"
-                f"📅 **Время:** {time_str}\n"
+                f"📅 **Время:** {time_str}(МСК)\n"
                 f"💰 **Сумма:** {total_sum}₽\n\n"
                 f"Спасибо за заказ!\n"
    		f" Следите за сообщениями в TГ группе РАСПРОДАЖИ СЕВЕРНАЯ ДОЛИНА и в БИТРИКС о дате и времени выдачи, а также о возможных изменениях!"
