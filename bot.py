@@ -5,6 +5,8 @@ import requests
 import json
 import random
 from datetime import datetime
+from threading import Thread
+import time
 
 # --- КОНФИГУРАЦИЯ ---
 BOT_TOKEN = '8401742790:AAECk0oEsrI4TgLsRGmKAFmxt2fZbYarINI'
@@ -319,7 +321,7 @@ def send_to_google(message):
                 f"📅 **Время:** {time_str}\n"
                 f"💰 **Сумма:** {total_sum}₽\n\n"
                 f"Спасибо за заказ!\n"
-   		f" Следите за сообщениями в TГ группе РАСПРОДАЖИ СЕВЕРНАЯ ДОЛИНА о дате и времени выдачи, а также о возможных изменениях!"
+   		f" Следите за сообщениями в TГ группе РАСПРОДАЖИ СЕВЕРНАЯ ДОЛИНА и в БИТРИКС о дате и времени выдачи, а также о возможных изменениях!"
             )
             bot.send_message(user_id, final_message, parse_mode="Markdown")
             
@@ -350,6 +352,7 @@ def handle_group(message):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton(text="Перейти в бот", url=f"https://t.me/{BOT_USERNAME}"))
         bot.reply_to(message, "Для заказа перейдите в личные сообщения:", reply_markup=markup)
+
 
 print("Бот готов к работе!")
 bot.infinity_polling()
