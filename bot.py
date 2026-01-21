@@ -147,30 +147,21 @@ def show_edit_menu(chat_id):
     bot.send_message(chat_id, "Какой товар изменить?", reply_markup=markup)
 
 # ==========================================
-# 3. ОБРАБОТКА НАЖАТИЙ (CALLBACK)
+# 3. ОБРАБОТКА НАЖАТИЙ (ИСПРАВЛЕННАЯ)
 # ==========================================
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_catalog_clicks(call):
     chat_id = call.message.chat.id
-
- # --- НОВОЕ: ОБРАБОТКА КНОПКИ ПОВТОРА КАТАЛОГА ---
+    
+    # --- КНОПКИ ПОВТОРА (ЕСЛИ БЫЛА ОШИБКА) ---
     if call.data == "retry_catalog":
-        # Показываем юзеру, что бот принял нажатие
-        bot.answer_callback_query(call.id, "Пробую загрузить еще раз...")
-        
-        # Удаляем сообщение с ошибкой, чтобы было красиво
+        bot.answer_callback_query(call.id, "Загружаю...")
         try: bot.delete_message(chat_id, call.message.message_id)
         except: pass
-        
-        # Снова вызываем функцию показа каталога
-        # Она сама попробует скачать данные еще раз
-        bot.send_message(chat_id, "🔄 Попытка связи с базой данных...")
         show_product_catalog(chat_id, "👇 Каталог товаров:")
         return
-    # ------------------------------------------------
-    
-     # --- НОВОЕ: ОБРАБОТКА ПОВТОРА ОТПРАВКИ (если есть) ---
+
     if call.data == "retry_checkout":
         try: bot.delete_message(chat_id, call.message.message_id) 
         except: pass
@@ -183,12 +174,13 @@ def handle_catalog_clicks(call):
         start_private(call.message)
         return
 
-    # Проверка сессии
+    # --- ПРОВЕРКА СЕССИИ ---
     if chat_id not in user_data:
         bot.answer_callback_query(call.id, "Сессия истекла")
         start_private(call.message)
         return
 
+    # --- ЛОГИКА МЕНЮ ---
     if call.data == "clear_cart":
         user_data[chat_id]['cart'] = {}
         try: bot.delete_message(chat_id, call.message.message_id)
@@ -210,19 +202,18 @@ def handle_catalog_clicks(call):
         except: pass
         show_product_catalog(chat_id, "Каталог:")
 
-elif call.data.startswith("add|"):
+    # --- ВОТ ТУТ БЫЛА ОШИБКА ---
+    elif call.data.startswith("add|"):
         short_name = call.data.split("|")[1]
         
-        # Ищем полную информацию (имя, цена, ОСТАТОК)
         full_product = find_product_info(short_name)
         
         if full_product:
             stock = full_product.get('stock', 0)
             
-            # Сохраняем лимиты в память пользователя
             user_data[chat_id]['current_product'] = full_product['name']
             user_data[chat_id]['current_price'] = full_product['price']
-            user_data[chat_id]['max_qty'] = stock # <--- ЗАПОМНИЛИ ОСТАТОК
+            user_data[chat_id]['max_qty'] = stock 
             user_data[chat_id]['mode'] = 'add'
             
             msg = bot.send_message(
@@ -240,6 +231,7 @@ elif call.data.startswith("add|"):
     elif call.data.startswith("mod|"):
         short_name = call.data.split("|")[1]
         full_name = short_name
+        # Ищем полное имя в корзине
         for item in user_data[chat_id]['cart']:
             if item.startswith(short_name):
                 full_name = item
@@ -247,8 +239,14 @@ elif call.data.startswith("add|"):
         
         user_data[chat_id]['current_product'] = full_name
         user_data[chat_id]['current_price'] = user_data[chat_id]['cart'][full_name]['price']
+        # При редактировании лимит считается иначе, но для простоты берем тот же max_qty если он сохранился
+        # Или можно не проверять лимит жестко при уменьшении
         user_data[chat_id]['mode'] = 'edit'
-        
+        # Пытаемся восстановить max_qty из справочника снова
+        p_info = find_product_info(short_name)
+        if p_info:
+             user_data[chat_id]['max_qty'] = p_info.get('stock', 999)
+
         msg = bot.send_message(chat_id, f"Введите новое количество для **{full_name}** (0 - удалить):", parse_mode="Markdown")
         bot.register_next_step_handler(msg, save_quantity)
 
