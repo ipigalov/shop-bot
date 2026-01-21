@@ -38,7 +38,7 @@ def find_product_info(short_name):
     all_products = get_products_from_google()
     for p in all_products:
         if p['name'].startswith(short_name):
-            return p # Теперь тут внутри есть ключ 'stock'
+            return p # Возвращаем весь объект, включая 'stock'
     return None
 
 # ==========================================
@@ -76,35 +76,33 @@ def save_fio_and_show_catalog(message):
 def show_product_catalog(chat_id, text_message):
     products_list = get_products_from_google()
     
-   # Пытаемся получить данные
-    products_list = get_products_from_google()
-    
-    # ЕСЛИ ОШИБКА (список пуст)
     if not products_list:
+        # Рисуем кнопку повтора, если список пуст
         markup = types.InlineKeyboardMarkup()
-        # Кнопка повтора
-        btn_retry = types.InlineKeyboardButton("🔄 Попробовать снова", callback_data="retry_catalog")
-        markup.add(btn_retry)
-        
-        bot.send_message(
-            chat_id, 
-            "⚠️ **Не удалось загрузить прайс-лист.**\nGoogle Таблицы долго отвечают. Попробуйте нажать кнопку ниже:", 
-            reply_markup=markup,
-            parse_mode="Markdown"
-        )
+        markup.add(types.InlineKeyboardButton("🔄 Попробовать снова", callback_data="retry_catalog"))
+        bot.send_message(chat_id, "⚠️ Не удалось загрузить прайс. Попробуйте обновить:", reply_markup=markup)
         return
 
-    # ЕСЛИ ВСЕ ХОРОШО - Строим меню как обычно
     markup = types.InlineKeyboardMarkup(row_width=1)
     
     for item in products_list:
         name = item['name']
         price = item['price']
+        stock = item.get('stock', 0) # Получаем остаток (0 если нет данных)
+        
         short_name = name[:20]
-        btn_text = f"{name} — {price}₽"
-        markup.add(types.InlineKeyboardButton(text=btn_text, callback_data=f"add|{short_name}"))
+        
+        # --- ФОРМИРУЕМ ТЕКСТ КНОПКИ ---
+        if stock > 0:
+            btn_text = f"{name} — {price}₽ (остаток {stock} шт.)"
+            # Передаем короткое имя в callback
+            markup.add(types.InlineKeyboardButton(text=btn_text, callback_data=f"add|{short_name}"))
+        else:
+            # Если товара 0, можно либо не показывать кнопку, либо сделать неактивной
+            # Мы просто не добавляем кнопку, чтобы не путать
+            pass
     
-    # Кнопки корзины
+    # КНОПКИ КОРЗИНЫ
     cart = user_data[chat_id].get('cart', {})
     total_sum = 0
     cart_lines = []
@@ -130,7 +128,6 @@ def show_product_catalog(chat_id, text_message):
         bot.send_message(chat_id, full_text, reply_markup=markup, parse_mode="Markdown")
     except:
         bot.send_message(chat_id, full_text, reply_markup=markup)
-
 def show_edit_menu(chat_id):
     cart = user_data[chat_id].get('cart', {})
     markup = types.InlineKeyboardMarkup(row_width=1)
@@ -207,32 +204,32 @@ def handle_catalog_clicks(call):
         except: pass
         show_product_catalog(chat_id, "Каталог:")
 
-   elif call.data.startswith("add|"):
+elif call.data.startswith("add|"):
         short_name = call.data.split("|")[1]
+        
+        # Ищем полную информацию (имя, цена, ОСТАТОК)
         full_product = find_product_info(short_name)
         
         if full_product:
-            # Получаем остаток из Гугла
-            stock = full_product.get('stock', 999) # 999 на случай ошибки
+            stock = full_product.get('stock', 0)
             
+            # Сохраняем лимиты в память пользователя
             user_data[chat_id]['current_product'] = full_product['name']
             user_data[chat_id]['current_price'] = full_product['price']
-            user_data[chat_id]['max_qty'] = stock  # <--- ЗАПОМИНАЕМ ЛИМИТ
+            user_data[chat_id]['max_qty'] = stock # <--- ЗАПОМНИЛИ ОСТАТОК
             user_data[chat_id]['mode'] = 'add'
             
             msg = bot.send_message(
                 chat_id, 
                 f"Товар: **{full_product['name']}**\n"
                 f"Цена: {full_product['price']}₽\n"
-                f"Доступно на складе: **{stock} шт.**\n\n"
+                f"Доступно: {stock} шт.\n\n"
                 f"Введите количество:", 
                 parse_mode="Markdown"
             )
             bot.register_next_step_handler(msg, save_quantity)
         else:
-            bot.answer_callback_query(call.id, "Товар закончился или недоступен.")
-            # Обновляем каталог, чтобы убрать товар
-            show_product_catalog(chat_id, "Каталог обновлен:")
+            bot.answer_callback_query(call.id, "Ошибка товара")
 
     elif call.data.startswith("mod|"):
         short_name = call.data.split("|")[1]
@@ -259,48 +256,48 @@ def save_quantity(message):
     if text == '/start': start_private(message); return
     
     if not text.isdigit():
-        msg = bot.send_message(user_id, "⚠️ Введите число цифрами:")
+        msg = bot.send_message(user_id, "Введите число цифрами:")
         bot.register_next_step_handler(msg, save_quantity); return
 
     qty = int(text)
     
-    # Достаем сохраненные данные
+    # Достаем данные
     product = user_data[user_id]['current_product']
     price = user_data[user_id]['current_price']
-    max_qty = user_data[user_id].get('max_qty', 999) # Достаем лимит
+    max_qty = user_data[user_id].get('max_qty', 999) # Лимит
     mode = user_data[user_id].get('mode', 'add')
     cart = user_data[user_id]['cart']
     
-    # --- ПРОВЕРКА НАЛИЧИЯ (НОВОЕ) ---
+    # --- ЛОГИКА ПРОВЕРКИ ---
     
-    # Считаем, сколько пользователь УЖЕ положил в корзину ранее
+    # Смотрим, сколько этого товара УЖЕ лежит в корзине
     already_in_cart = 0
-    if product in cart and mode == 'add': 
-        # Если добавляем к существующему, нужно учитывать старое значение
+    if product in cart and mode == 'add':
         already_in_cart = cart[product]['qty']
         
-    # Итоговое количество, которое хочет получить пользователь
+    # Сколько всего хочет пользователь
     total_wanted = qty if mode == 'edit' else (qty + already_in_cart)
     
+    # Сколько еще можно добавить
+    available_to_add = max_qty - already_in_cart
+    if available_to_add < 0: available_to_add = 0
+    
+    # Если превышен лимит
     if total_wanted > max_qty:
-        # Если хочет больше, чем есть
-        available_now = max_qty - already_in_cart
-        if available_now < 0: available_now = 0
-        
-        msg = bot.send_message(
-            user_id, 
-            f"❌ **Недостаточно товара на складе!**\n\n"
-            f"Всего доступно: {max_qty} шт.\n"
-            f"У вас в корзине уже: {already_in_cart} шт.\n"
-            f"Вы можете заказать еще не более: **{available_now} шт.**\n\n"
-            f"Введите меньшее количество:",
-            parse_mode="Markdown"
+        error_msg = (
+            f"❌ **К сожалению, такого количества товара нет в наличии.**\n"
+            f"Скорректируйте заказ.\n\n"
+            f"Всего на складе: {max_qty} шт.\n"
+            f"У вас в корзине: {already_in_cart} шт.\n"
+            f"👇 **Доступно к заказу не более: {available_to_add} шт.**\n\n"
+            f"Введите меньшее количество:"
         )
-        bot.register_next_step_handler(msg, save_quantity)
+        msg = bot.send_message(user_id, error_msg, parse_mode="Markdown")
+        bot.register_next_step_handler(msg, save_quantity) # Ждем ввода снова
         return
-    # -------------------------------
+    # -----------------------
 
-    # Если проверка пройдена - сохраняем
+    # Если всё ок - сохраняем
     if mode == 'edit':
         if qty == 0:
             if product in cart: del cart[product]
@@ -308,9 +305,9 @@ def save_quantity(message):
             cart[product] = {'qty': qty, 'price': price}
         show_edit_menu(user_id)
     else:
+        # Добавление
         if product in cart:
             cart[product]['qty'] += qty
-            # Цену обновляем
             cart[product]['price'] = price 
         else:
             cart[product] = {'qty': qty, 'price': price}
