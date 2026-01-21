@@ -259,39 +259,26 @@ def handle_catalog_clicks(call):
 def save_quantity(message):
     user_id = message.chat.id
     
-    # 1. ПРОВЕРКА: Если это не текст ИЛИ если текст пустой (None)
-    # Это ловит стикеры, гифки, фото, голосовые
+    # 1. Защита от стикеров и пустоты
     if message.content_type != 'text' or message.text is None:
-        msg = bot.send_message(
-            user_id, 
-            "⛔️ **Я не понимаю картинки и стикеры.**\n"
-            "Пожалуйста, пришлите количество **числом**:",
-            parse_mode="Markdown"
-        )
-        # Ждем ввода снова
+        msg = bot.send_message(user_id, "⛔️ Я понимаю только числа. Напишите цифру:")
         bot.register_next_step_handler(msg, save_quantity)
         return
 
-    # 2. Если это команда /start - выходим
+    # 2. Проверка команды
     if message.text == '/start': 
         start_private(message)
         return
     
-    # 3. ПРОВЕРКА: Является ли текст числом
+    # 3. Проверка на число
     if not message.text.isdigit():
-        msg = bot.send_message(
-            user_id, 
-            "⚠️ **Это не число.**\n"
-            "Введите количество цифрами (например: 1, 2, 5):"
-        )
-        # Ждем ввода снова
+        msg = bot.send_message(user_id, "⚠️ Введите количество цифрами:")
         bot.register_next_step_handler(msg, save_quantity)
         return
 
-    # --- ЕСЛИ ВСЁ ОК (ЭТО ЧИСЛО) ---
     qty = int(message.text)
     
-    # Восстанавливаем данные из памяти
+    # Восстановление контекста
     try:
         product = user_data[user_id]['current_product']
         price = user_data[user_id]['current_price']
@@ -299,11 +286,10 @@ def save_quantity(message):
         mode = user_data[user_id].get('mode', 'add')
         cart = user_data[user_id]['cart']
     except KeyError:
-        # Если бот перезагрузился и потерял данные
-        bot.send_message(user_id, "Данные сессии устарели. Начните заново /start")
+        bot.send_message(user_id, "Данные устарели. Начните заново /start")
         return
 
-    # Считаем уже добавленное
+    # Подсчет
     already_in_cart = 0
     if product in cart and mode == 'add':
         already_in_cart = cart[product]['qty']
@@ -315,10 +301,10 @@ def save_quantity(message):
     # Проверка лимита
     if total_wanted > max_qty:
         error_msg = (
-            f"❌ **Недостаточно товара на складе.**\n"
-            f"Всего доступно: {max_qty} шт.\n"
+            f"❌ **Недостаточно товара.**\n"
+            f"Всего на складе: {max_qty} шт.\n"
             f"У вас в корзине: {already_in_cart} шт.\n"
-            f"👇 Доступно к заказу не более: **{available_to_add} шт.**\n\n"
+            f"👇 Можно заказать еще: **{available_to_add} шт.**\n\n"
             f"Введите меньшее количество:"
         )
         msg = bot.send_message(user_id, error_msg, parse_mode="Markdown")
@@ -340,6 +326,7 @@ def save_quantity(message):
             cart[product] = {'qty': qty, 'price': price, 'max_qty': max_qty}
             
         show_product_catalog(user_id, f"✅ Добавлено: {product} ({qty} шт.)")
+
 
 # ==========================================
 # 5. ПОДТВЕРЖДЕНИЕ И ОТПРАВКА
