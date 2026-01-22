@@ -18,6 +18,10 @@ BOT_USERNAME = '@SD_OrderShopBot'
 # Вставьте сюда полученный ID (обязательно с минусом, если он есть)
 GROUP_CHAT_ID = -1003663977691 
 
+# --- СПИСОК АДМИНОВ (Кому можно управлять ботом в группе) ---
+# Укажите через запятую ID всех, кто имеет право запрашивать отчеты в группе
+ADMIN_IDS = [805863682] 
+
 bot = telebot.TeleBot(BOT_TOKEN)
 user_data = {} 
 
@@ -58,11 +62,16 @@ def start_private(message):
     bot.clear_step_handler_by_chat_id(message.chat.id)
     if message.chat.id in user_data: del user_data[message.chat.id]
     
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("🛍 Начать заказ")
-    bot.send_message(message.chat.id, "👋 Добро пожаловать! Нажмите кнопку для заказа.", reply_markup=markup)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    # Две кнопки в ряд
+    btn1 = types.KeyboardButton("🛍 Начать заказ")
+    btn2 = types.KeyboardButton("📊 Наличие товаров")
+    markup.add(btn1, btn2)
+    
+    bot.send_message(message.chat.id, "👋 Добро пожаловать! Выберите действие:", reply_markup=markup)
 
 @bot.message_handler(func=lambda message: message.text == "🛍 Начать заказ")
+
 def ask_fio_step(message):
     markup = types.ReplyKeyboardRemove()
     msg = bot.send_message(message.chat.id, "Чтобы мы приняли заказ именно для Вас и не перепутали, введите, пожалуйста, Ваше **ФИО**:", reply_markup=markup, parse_mode="Markdown")
@@ -153,6 +162,40 @@ def show_edit_menu(chat_id):
 # ==========================================
 
 @bot.callback_query_handler(func=lambda call: True)
+
+# ==========================================
+# ПОКАЗ ОСТАТКОВ ПОЛЬЗОВАТЕЛЮ
+# ==========================================
+@bot.message_handler(func=lambda message: message.text == "📊 Наличие товаров" and message.chat.type == 'private')
+def show_stock_to_user(message):
+    bot.send_message(message.chat.id, "⏳ Проверяю склад...")
+    
+    products = get_products_from_google()
+    
+    if not products:
+        bot.send_message(message.chat.id, "⚠️ Не удалось загрузить данные. Попробуйте позже.")
+        return
+
+    report_lines = []
+    for p in products:
+        name = p['name']
+        price = p['price']
+        stock = p.get('stock', 0)
+        
+        # Красивое форматирование
+        if stock > 5:
+            status = f"🟢 Есть ({stock} шт.)"
+        elif stock > 0:
+            status = f"🟡 Мало ({stock} шт.)"
+        else:
+            status = "🔴 Нет в наличии"
+            
+        report_lines.append(f"▫️ **{name}**\n     Price: {price}₽ | {status}")
+        
+    text = "📦 **АКТУАЛЬНОЕ НАЛИЧИЕ:**\n\n" + "\n".join(report_lines)
+    
+    bot.send_message(message.chat.id, text, parse_mode="Markdown")
+
 def handle_catalog_clicks(call):
     chat_id = call.message.chat.id
     
@@ -472,24 +515,35 @@ def ask_to_retry(chat_id):
 # ==========================================
 # ОБРАБОТКА СООБЩЕНИЙ В ГРУППЕ
 # ==========================================
+# ==========================================
+# 6. ГРУППА И ОТЧЕТЫ (С ЗАЩИТОЙ)
+# ==========================================
 @bot.message_handler(func=lambda message: message.chat.type in ['group', 'supergroup'])
 def handle_group_logic(message):
-    # 1. Если нажали "Запросить остатки" или ввели команду
-    if message.text == "📊 Актуальные остатки" or message.text == "/stock":
-        send_stock_report_to_group(message.chat.id)
+    user_id = message.from_user.id
+    
+    # --- БЛОК АДМИНИСТРАТОРА ---
+    # Проверяем, есть ли пользователь в списке ADMIN_IDS
+    if message.text in ["📊 Актуальные остатки", "/stock", "/menu"]:
+        if user_id in ADMIN_IDS:
+            if message.text == "/menu":
+                markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+                markup.add(types.KeyboardButton("📊 Актуальные остатки"))
+                bot.send_message(message.chat.id, "Админ-панель:", reply_markup=markup)
+            else:
+                send_stock_report_to_group(message.chat.id)
+        else:
+            # Если пишет не админ - можно проигнорировать или ответить
+            # bot.reply_to(message, "⛔️ У вас нет прав для этой команды.")
+            pass # Лучше просто промолчать
         return
 
-    # 2. Если пишут "Заказ" - отправляем в личку (старая логика)
+    # --- БЛОК ОБЩИЙ (Для всех) ---
+    # Пересылка в ЛС работает для всех
     if message.text.lower().startswith('заказ') or message.text.startswith('/start'):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton(text="➡️ Перейдите в бот", url=f"https://t.me/{BOT_USERNAME}"))
-        bot.reply_to(message, "Для оформления заказа перейдите в личные сообщения:", reply_markup=markup)
-
-    # 3. Если админ пишет /menu, показываем клавиатуру в группе
-    if message.text == "/menu":
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        markup.add(types.KeyboardButton("📊 Актуальные остатки"))
-        bot.send_message(message.chat.id, "Меню администратора:", reply_markup=markup)
+        bot.reply_to(message, "Оформить заказ можно тут:", reply_markup=markup)
 
 # --- ВЕБ-СЕРВЕР ДЛЯ RENDER ---
 app = Flask('')
