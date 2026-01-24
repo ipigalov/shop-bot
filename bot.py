@@ -20,7 +20,7 @@ GROUP_CHAT_ID = -1003663977691
 
 # --- СПИСОК АДМИНОВ (Кому можно управлять ботом в группе) ---
 # Укажите через запятую ID всех, кто имеет право запрашивать отчеты в группе
-ADMIN_IDS = [805863682] 
+ADMIN_IDS = [805863682, 6538175244] 
 
 bot = telebot.TeleBot(BOT_TOKEN)
 user_data = {} 
@@ -164,119 +164,77 @@ def show_edit_menu(chat_id):
 @bot.callback_query_handler(func=lambda call: True)
 
 # ==========================================
-# ПОКАЗ ОСТАТКОВ ПОЛЬЗОВАТЕЛЮ
+# 3. ОБРАБОТКА НАЖАТИЙ (ИСПРАВЛЕННАЯ)
 # ==========================================
-@bot.message_handler(func=lambda message: message.text == "📊 Наличие товаров" and message.chat.type == 'private')
-def show_stock_to_user(message):
-    bot.send_message(message.chat.id, "⏳ Проверяю склад...")
-    
-    products = get_products_from_google()
-    
-    if not products:
-        bot.send_message(message.chat.id, "⚠️ Не удалось загрузить данные. Попробуйте позже.")
-        return
-
-    report_lines = []
-    for p in products:
-        name = p['name']
-        price = p['price']
-        stock = p.get('stock', 0)
-        
-        # Красивое форматирование
-        if stock > 5:
-            status = f"🟢 Есть ({stock} шт.)"
-        elif stock > 0:
-            status = f"🟡 Мало ({stock} шт.)"
-        else:
-            status = "🔴 Нет в наличии"
-            
-        report_lines.append(f"▫️ **{name}**\n     Price: {price}₽ | {status}")
-        
-    text = "📦 **АКТУАЛЬНОЕ НАЛИЧИЕ:**\n\n" + "\n".join(report_lines)
-    
-    bot.send_message(message.chat.id, text, parse_mode="Markdown")
-
+@bot.callback_query_handler(func=lambda call: True)
 def handle_catalog_clicks(call):
-    chat_id = call.message.chat.id
+    # --- ИСПРАВЛЕНИЕ ОШИБКИ ТУТ ---
+    # Мы берем чат из сообщения (call.message), а не из нажатия (call)
+    chat_id = call.message.chat.id 
+    # ------------------------------
     
-    # --- КНОПКИ ПОВТОРА (ЕСЛИ БЫЛА ОШИБКА) ---
+    # КНОПКИ ПОВТОРА
     if call.data == "retry_catalog":
-        bot.answer_callback_query(call.id, "Загружаю...")
-        try: bot.delete_message(chat_id, call.message.message_id)
-        except: pass
+        try: bot.delete_message(chat_id, call.message.message_id); except: pass
         show_product_catalog(chat_id, "👇 Каталог товаров:")
         return
 
     if call.data == "retry_checkout":
-        try: bot.delete_message(chat_id, call.message.message_id) 
-        except: pass
-        send_to_google(call.message)
+        try: bot.delete_message(chat_id, call.message.message_id); except: pass
+        # Важно: передаем call.message, т.к. функция ждет объект message
+        send_to_google(call.message) 
         return
         
     if call.data == "cancel_on_error":
-        try: bot.delete_message(chat_id, call.message.message_id) 
-        except: pass
+        try: bot.delete_message(chat_id, call.message.message_id); except: pass
         start_private(call.message)
         return
 
-    # --- ПРОВЕРКА СЕССИИ ---
+    # ПРОВЕРКА СЕССИИ
     if chat_id not in user_data:
         bot.answer_callback_query(call.id, "Сессия истекла")
-        start_private(call.message)
+        start_private(call.message) # <-- Тут тоже было важно call.message
         return
 
-    # --- ЛОГИКА МЕНЮ ---
+    # ЛОГИКА МЕНЮ
     if call.data == "clear_cart":
         user_data[chat_id]['cart'] = {}
-        try: bot.delete_message(chat_id, call.message.message_id)
-        except: pass
+        try: bot.delete_message(chat_id, call.message.message_id); except: pass
         show_product_catalog(chat_id, "Корзина очищена.")
 
     elif call.data == "checkout":
-        try: bot.delete_message(chat_id, call.message.message_id)
-        except: pass
+        try: bot.delete_message(chat_id, call.message.message_id); except: pass
         show_confirm_menu(chat_id)
 
     elif call.data == "edit_cart_menu":
-        try: bot.delete_message(chat_id, call.message.message_id)
-        except: pass
+        try: bot.delete_message(chat_id, call.message.message_id); except: pass
         show_edit_menu(chat_id)
 
     elif call.data == "back_to_catalog":
-        try: bot.delete_message(chat_id, call.message.message_id)
-        except: pass
+        try: bot.delete_message(chat_id, call.message.message_id); except: pass
         show_product_catalog(chat_id, "Каталог:")
 
-    # --- ВОТ ТУТ БЫЛА ОШИБКА ---
+    # ДОБАВЛЕНИЕ ТОВАРА (ВАШ БЛОК С ОСТАТКАМИ)
     elif call.data.startswith("add|"):
         short_name = call.data.split("|")[1]
-        
         full_product = find_product_info(short_name)
         
         if full_product:
             stock = full_product.get('stock', 0)
-            
             user_data[chat_id]['current_product'] = full_product['name']
             user_data[chat_id]['current_price'] = full_product['price']
-            user_data[chat_id]['max_qty'] = stock 
+            user_data[chat_id]['max_qty'] = stock
             user_data[chat_id]['mode'] = 'add'
             
-            msg = bot.send_message(
-                chat_id, 
-                f"Товар: **{full_product['name']}**\n"
-                f"Цена: {full_product['price']}₽\n"
-                f"Доступно: {stock} шт.\n\n"
-                f"Введите количество:", 
-                parse_mode="Markdown"
-            )
+            msg = bot.send_message(chat_id, f"Товар: **{full_product['name']}**\nДоступно: {stock} шт.\nВведите количество:", parse_mode="Markdown")
             bot.register_next_step_handler(msg, save_quantity)
         else:
             bot.answer_callback_query(call.id, "Ошибка товара")
 
+    # РЕДАКТИРОВАНИЕ ТОВАРА
     elif call.data.startswith("mod|"):
         short_name = call.data.split("|")[1]
         full_name = short_name
-        # Ищем полное имя в корзине
         for item in user_data[chat_id]['cart']:
             if item.startswith(short_name):
                 full_name = item
@@ -284,10 +242,9 @@ def handle_catalog_clicks(call):
         
         user_data[chat_id]['current_product'] = full_name
         user_data[chat_id]['current_price'] = user_data[chat_id]['cart'][full_name]['price']
-        # При редактировании лимит считается иначе, но для простоты берем тот же max_qty если он сохранился
-        # Или можно не проверять лимит жестко при уменьшении
         user_data[chat_id]['mode'] = 'edit'
-        # Пытаемся восстановить max_qty из справочника снова
+        
+        # Пытаемся восстановить лимит остатка
         p_info = find_product_info(short_name)
         if p_info:
              user_data[chat_id]['max_qty'] = p_info.get('stock', 999)
