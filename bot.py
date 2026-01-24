@@ -18,10 +18,6 @@ BOT_USERNAME = '@SD_OrderShopBot'
 # Вставьте сюда полученный ID (обязательно с минусом, если он есть)
 GROUP_CHAT_ID = -1003663977691 
 
-# --- СПИСОК АДМИНОВ (Кому можно управлять ботом в группе) ---
-# Укажите через запятую ID всех, кто имеет право запрашивать отчеты в группе
-ADMIN_IDS = [805863682, 6538175244] 
-
 bot = telebot.TeleBot(BOT_TOKEN)
 user_data = {} 
 
@@ -62,16 +58,11 @@ def start_private(message):
     bot.clear_step_handler_by_chat_id(message.chat.id)
     if message.chat.id in user_data: del user_data[message.chat.id]
     
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    # Две кнопки в ряд
-    btn1 = types.KeyboardButton("🛍 Начать заказ")
-    btn2 = types.KeyboardButton("📊 Наличие товаров")
-    markup.add(btn1, btn2)
-    
-    bot.send_message(message.chat.id, "👋 Добро пожаловать! Выберите действие:", reply_markup=markup)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add("🛍 Начать заказ")
+    bot.send_message(message.chat.id, "👋 Добро пожаловать! Нажмите кнопку для заказа.", reply_markup=markup)
 
 @bot.message_handler(func=lambda message: message.text == "🛍 Начать заказ")
-
 def ask_fio_step(message):
     markup = types.ReplyKeyboardRemove()
     msg = bot.send_message(message.chat.id, "Чтобы мы приняли заказ именно для Вас и не перепутали, введите, пожалуйста, Ваше **ФИО**:", reply_markup=markup, parse_mode="Markdown")
@@ -162,133 +153,87 @@ def show_edit_menu(chat_id):
 # ==========================================
 
 @bot.callback_query_handler(func=lambda call: True)
-
-# ==========================================
-# 3. ОБРАБОТКА НАЖАТИЙ (ИСПРАВЛЕННАЯ)
-# ==========================================
-@bot.callback_query_handler(func=lambda call: True)
 def handle_catalog_clicks(call):
-    # --- ИСПРАВЛЕНИЕ ОШИБКИ ТУТ ---
-    # Мы берем чат из сообщения (call.message), а не из нажатия (call)
-    chat_id = call.message.chat.id 
-    # ------------------------------
+    chat_id = call.message.chat.id
     
-    # КНОПКИ ПОВТОРА
+    # --- КНОПКИ ПОВТОРА (ЕСЛИ БЫЛА ОШИБКА) ---
     if call.data == "retry_catalog":
-       try:
-            bot.delete_message(chat_id, call.message.message_id)
-        except:
-            pass
+        bot.answer_callback_query(call.id, "Загружаю...")
+        try: bot.delete_message(chat_id, call.message.message_id)
+        except: pass
         show_product_catalog(chat_id, "👇 Каталог товаров:")
         return
 
     if call.data == "retry_checkout":
-       try:
-            bot.delete_message(chat_id, call.message.message_id)
-        except:
-            pass
-        # Важно: передаем call.message, т.к. функция ждет объект message
-        send_to_google(call.message) 
+        try: bot.delete_message(chat_id, call.message.message_id) 
+        except: pass
+        send_to_google(call.message)
         return
         
     if call.data == "cancel_on_error":
-        try:
-            bot.delete_message(chat_id, call.message.message_id)
-        except:
-            pass
+        try: bot.delete_message(chat_id, call.message.message_id) 
+        except: pass
         start_private(call.message)
         return
 
-    # ПРОВЕРКА СЕССИИ
+    # --- ПРОВЕРКА СЕССИИ ---
     if chat_id not in user_data:
         bot.answer_callback_query(call.id, "Сессия истекла")
-        start_private(call.message) # <-- Тут тоже было важно call.message
+        start_private(call.message)
         return
 
-    # ЛОГИКА МЕНЮ
+    # --- ЛОГИКА МЕНЮ ---
     if call.data == "clear_cart":
         user_data[chat_id]['cart'] = {}
-        try:
-            bot.delete_message(chat_id, call.message.message_id)
-        except:
-            pass
+        try: bot.delete_message(chat_id, call.message.message_id)
+        except: pass
         show_product_catalog(chat_id, "Корзина очищена.")
 
     elif call.data == "checkout":
-       try:
-            bot.delete_message(chat_id, call.message.message_id)
-        except:
-            pass
+        try: bot.delete_message(chat_id, call.message.message_id)
+        except: pass
         show_confirm_menu(chat_id)
 
     elif call.data == "edit_cart_menu":
-        try:
-            bot.delete_message(chat_id, call.message.message_id)
-        except:
-            pass
+        try: bot.delete_message(chat_id, call.message.message_id)
+        except: pass
         show_edit_menu(chat_id)
 
     elif call.data == "back_to_catalog":
-        try:
-            bot.delete_message(chat_id, call.message.message_id)
-        except:
-            pass
+        try: bot.delete_message(chat_id, call.message.message_id)
+        except: pass
         show_product_catalog(chat_id, "Каталог:")
 
-    # ДОБАВЛЕНИЕ ТОВАРА (ВАШ БЛОК С ОСТАТКАМИ)
-    # БЛОК ДОБАВЛЕНИЯ ТОВАРА (ЗАЩИЩЕННЫЙ)
+    # --- ВОТ ТУТ БЫЛА ОШИБКА ---
     elif call.data.startswith("add|"):
-        try:
-            print(f"DEBUG: Клиент {chat_id} выбрал товар...") # ЛОГ
+        short_name = call.data.split("|")[1]
+        
+        full_product = find_product_info(short_name)
+        
+        if full_product:
+            stock = full_product.get('stock', 0)
             
-            # 1. ВОССТАНОВЛЕНИЕ ПАМЯТИ (Защита от перезагрузки)
-            if chat_id not in user_data:
-                print("DEBUG: Память пуста, создаю заново.")
-                user_data[chat_id] = {'cart': {}, 'fio': 'Unknown'}
-
-            short_name = call.data.split("|")[1]
+            user_data[chat_id]['current_product'] = full_product['name']
+            user_data[chat_id]['current_price'] = full_product['price']
+            user_data[chat_id]['max_qty'] = stock 
+            user_data[chat_id]['mode'] = 'add'
             
-            # 2. ПОИСК ТОВАРА
-            print(f"DEBUG: Ищу товар по ключу '{short_name}'")
-            full_product = find_product_info(short_name)
-            
-            if full_product:
-                print(f"DEBUG: Товар найден: {full_product['name']}")
-                
-                stock = full_product.get('stock', 0)
-                
-                # Записываем данные
-                user_data[chat_id]['current_product'] = full_product['name']
-                user_data[chat_id]['current_price'] = full_product['price']
-                user_data[chat_id]['max_qty'] = stock
-                user_data[chat_id]['mode'] = 'add'
-                
-                msg = bot.send_message(
-                    chat_id, 
-                    f"Товар: **{full_product['name']}**\n"
-                    f"Цена: {full_product['price']}₽\n"
-                    f"Доступно на складе: {stock} шт.\n\n"
-                    f"Введите количество (числом):", 
-                    parse_mode="Markdown"
-                )
-                bot.register_next_step_handler(msg, save_quantity)
-            else:
-                # Если товар не найден в базе
-                print("DEBUG: Товар НЕ найден в базе!")
-                bot.send_message(chat_id, "❌ Ошибка: Не могу найти информацию о товаре. Попробуйте обновить каталог.")
-                show_product_catalog(chat_id, "Каталог:")
+            msg = bot.send_message(
+                chat_id, 
+                f"Товар: **{full_product['name']}**\n"
+                f"Цена: {full_product['price']}₽\n"
+                f"Доступно: {stock} шт.\n\n"
+                f"Введите количество:", 
+                parse_mode="Markdown"
+            )
+            bot.register_next_step_handler(msg, save_quantity)
+        else:
+            bot.answer_callback_query(call.id, "Ошибка товара")
 
-        except Exception as e:
-            # Если случилась любая другая ошибка - бот напишет об этом
-            print(f"CRITICAL ERROR in add: {e}")
-            bot.send_message(chat_id, f"❌ Произошла ошибка при выборе товара: {e}")
-            # Возвращаем в меню, чтобы не завис
-            start_private(call.message)
-
-    # РЕДАКТИРОВАНИЕ ТОВАРА
     elif call.data.startswith("mod|"):
         short_name = call.data.split("|")[1]
         full_name = short_name
+        # Ищем полное имя в корзине
         for item in user_data[chat_id]['cart']:
             if item.startswith(short_name):
                 full_name = item
@@ -296,9 +241,10 @@ def handle_catalog_clicks(call):
         
         user_data[chat_id]['current_product'] = full_name
         user_data[chat_id]['current_price'] = user_data[chat_id]['cart'][full_name]['price']
+        # При редактировании лимит считается иначе, но для простоты берем тот же max_qty если он сохранился
+        # Или можно не проверять лимит жестко при уменьшении
         user_data[chat_id]['mode'] = 'edit'
-        
-        # Пытаемся восстановить лимит остатка
+        # Пытаемся восстановить max_qty из справочника снова
         p_info = find_product_info(short_name)
         if p_info:
              user_data[chat_id]['max_qty'] = p_info.get('stock', 999)
@@ -526,35 +472,24 @@ def ask_to_retry(chat_id):
 # ==========================================
 # ОБРАБОТКА СООБЩЕНИЙ В ГРУППЕ
 # ==========================================
-# ==========================================
-# 6. ГРУППА И ОТЧЕТЫ (С ЗАЩИТОЙ)
-# ==========================================
 @bot.message_handler(func=lambda message: message.chat.type in ['group', 'supergroup'])
 def handle_group_logic(message):
-    user_id = message.from_user.id
-    
-    # --- БЛОК АДМИНИСТРАТОРА ---
-    # Проверяем, есть ли пользователь в списке ADMIN_IDS
-    if message.text in ["📊 Актуальные остатки", "/stock", "/menu"]:
-        if user_id in ADMIN_IDS:
-            if message.text == "/menu":
-                markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-                markup.add(types.KeyboardButton("📊 Актуальные остатки"))
-                bot.send_message(message.chat.id, "Админ-панель:", reply_markup=markup)
-            else:
-                send_stock_report_to_group(message.chat.id)
-        else:
-            # Если пишет не админ - можно проигнорировать или ответить
-            # bot.reply_to(message, "⛔️ У вас нет прав для этой команды.")
-            pass # Лучше просто промолчать
+    # 1. Если нажали "Запросить остатки" или ввели команду
+    if message.text == "📊 Актуальные остатки" or message.text == "/stock":
+        send_stock_report_to_group(message.chat.id)
         return
 
-    # --- БЛОК ОБЩИЙ (Для всех) ---
-    # Пересылка в ЛС работает для всех
+    # 2. Если пишут "Заказ" - отправляем в личку (старая логика)
     if message.text.lower().startswith('заказ') or message.text.startswith('/start'):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton(text="➡️ Перейдите в бот", url=f"https://t.me/{BOT_USERNAME}"))
-        bot.reply_to(message, "Оформить заказ можно тут:", reply_markup=markup)
+        bot.reply_to(message, "Для оформления заказа перейдите в личные сообщения:", reply_markup=markup)
+
+    # 3. Если админ пишет /menu, показываем клавиатуру в группе
+    if message.text == "/menu":
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        markup.add(types.KeyboardButton("📊 Актуальные остатки"))
+        bot.send_message(message.chat.id, "Меню администратора:", reply_markup=markup)
 
 # --- ВЕБ-СЕРВЕР ДЛЯ RENDER ---
 app = Flask('')
