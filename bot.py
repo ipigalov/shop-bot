@@ -175,18 +175,27 @@ def handle_catalog_clicks(call):
     
     # КНОПКИ ПОВТОРА
     if call.data == "retry_catalog":
-        try: bot.delete_message(chat_id, call.message.message_id); except: pass
+       try:
+            bot.delete_message(chat_id, call.message.message_id)
+        except:
+            pass
         show_product_catalog(chat_id, "👇 Каталог товаров:")
         return
 
     if call.data == "retry_checkout":
-        try: bot.delete_message(chat_id, call.message.message_id); except: pass
+       try:
+            bot.delete_message(chat_id, call.message.message_id)
+        except:
+            pass
         # Важно: передаем call.message, т.к. функция ждет объект message
         send_to_google(call.message) 
         return
         
     if call.data == "cancel_on_error":
-        try: bot.delete_message(chat_id, call.message.message_id); except: pass
+        try:
+            bot.delete_message(chat_id, call.message.message_id)
+        except:
+            pass
         start_private(call.message)
         return
 
@@ -199,19 +208,31 @@ def handle_catalog_clicks(call):
     # ЛОГИКА МЕНЮ
     if call.data == "clear_cart":
         user_data[chat_id]['cart'] = {}
-        try: bot.delete_message(chat_id, call.message.message_id); except: pass
+        try:
+            bot.delete_message(chat_id, call.message.message_id)
+        except:
+            pass
         show_product_catalog(chat_id, "Корзина очищена.")
 
     elif call.data == "checkout":
-        try: bot.delete_message(chat_id, call.message.message_id); except: pass
+       try:
+            bot.delete_message(chat_id, call.message.message_id)
+        except:
+            pass
         show_confirm_menu(chat_id)
 
     elif call.data == "edit_cart_menu":
-        try: bot.delete_message(chat_id, call.message.message_id); except: pass
+        try:
+            bot.delete_message(chat_id, call.message.message_id)
+        except:
+            pass
         show_edit_menu(chat_id)
 
     elif call.data == "back_to_catalog":
-        try: bot.delete_message(chat_id, call.message.message_id); except: pass
+        try:
+            bot.delete_message(chat_id, call.message.message_id)
+        except:
+            pass
         show_product_catalog(chat_id, "Каталог:")
 
     # ДОБАВЛЕНИЕ ТОВАРА (ВАШ БЛОК С ОСТАТКАМИ)
