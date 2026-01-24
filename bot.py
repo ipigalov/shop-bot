@@ -215,21 +215,54 @@ def handle_catalog_clicks(call):
         show_product_catalog(chat_id, "Каталог:")
 
     # ДОБАВЛЕНИЕ ТОВАРА (ВАШ БЛОК С ОСТАТКАМИ)
+    # БЛОК ДОБАВЛЕНИЯ ТОВАРА (ЗАЩИЩЕННЫЙ)
     elif call.data.startswith("add|"):
-        short_name = call.data.split("|")[1]
-        full_product = find_product_info(short_name)
-        
-        if full_product:
-            stock = full_product.get('stock', 0)
-            user_data[chat_id]['current_product'] = full_product['name']
-            user_data[chat_id]['current_price'] = full_product['price']
-            user_data[chat_id]['max_qty'] = stock
-            user_data[chat_id]['mode'] = 'add'
+        try:
+            print(f"DEBUG: Клиент {chat_id} выбрал товар...") # ЛОГ
             
-            msg = bot.send_message(chat_id, f"Товар: **{full_product['name']}**\nДоступно: {stock} шт.\nВведите количество:", parse_mode="Markdown")
-            bot.register_next_step_handler(msg, save_quantity)
-        else:
-            bot.answer_callback_query(call.id, "Ошибка товара")
+            # 1. ВОССТАНОВЛЕНИЕ ПАМЯТИ (Защита от перезагрузки)
+            if chat_id not in user_data:
+                print("DEBUG: Память пуста, создаю заново.")
+                user_data[chat_id] = {'cart': {}, 'fio': 'Unknown'}
+
+            short_name = call.data.split("|")[1]
+            
+            # 2. ПОИСК ТОВАРА
+            print(f"DEBUG: Ищу товар по ключу '{short_name}'")
+            full_product = find_product_info(short_name)
+            
+            if full_product:
+                print(f"DEBUG: Товар найден: {full_product['name']}")
+                
+                stock = full_product.get('stock', 0)
+                
+                # Записываем данные
+                user_data[chat_id]['current_product'] = full_product['name']
+                user_data[chat_id]['current_price'] = full_product['price']
+                user_data[chat_id]['max_qty'] = stock
+                user_data[chat_id]['mode'] = 'add'
+                
+                msg = bot.send_message(
+                    chat_id, 
+                    f"Товар: **{full_product['name']}**\n"
+                    f"Цена: {full_product['price']}₽\n"
+                    f"Доступно на складе: {stock} шт.\n\n"
+                    f"Введите количество (числом):", 
+                    parse_mode="Markdown"
+                )
+                bot.register_next_step_handler(msg, save_quantity)
+            else:
+                # Если товар не найден в базе
+                print("DEBUG: Товар НЕ найден в базе!")
+                bot.send_message(chat_id, "❌ Ошибка: Не могу найти информацию о товаре. Попробуйте обновить каталог.")
+                show_product_catalog(chat_id, "Каталог:")
+
+        except Exception as e:
+            # Если случилась любая другая ошибка - бот напишет об этом
+            print(f"CRITICAL ERROR in add: {e}")
+            bot.send_message(chat_id, f"❌ Произошла ошибка при выборе товара: {e}")
+            # Возвращаем в меню, чтобы не завис
+            start_private(call.message)
 
     # РЕДАКТИРОВАНИЕ ТОВАРА
     elif call.data.startswith("mod|"):
