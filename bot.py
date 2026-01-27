@@ -465,3 +465,39 @@ def handle_group(message):
 # ЗАПУСК
 keep_alive()
 bot.infinity_polling()
+
+# ==========================================
+# ФУНКЦИЯ ОТПРАВКИ ОТЧЕТА (ЕЁ НЕ ХВАТАЛО)
+# ==========================================
+def send_stock_report_message(chat_id):
+    # 1. Пишем "Загрузка"
+    wait_msg = bot.send_message(chat_id, "⏳ Связываюсь со складом...")
+    
+    try:
+        # 2. Качаем данные
+        prods = get_products_from_google()
+        
+        if not prods: 
+            bot.edit_message_text("⚠️ Ошибка: Не удалось получить данные по остаткам.", chat_id, wait_msg.message_id)
+            return
+            
+        lines = []
+        for p in prods:
+            name = p.get('name', 'Товар')
+            stock = p.get('stock', 0)
+            
+            # Рисуем статус
+            if stock > 5: ic = "🟢"
+            elif stock > 0: ic = "🟡"
+            else: ic = "🔴"
+            
+            lines.append(f"{ic} {name}: **{stock} шт.**")
+        
+        text = "📦 **СКЛАД НА ТЕКУЩИЙ МОМЕНТ:**\n\n" + "\n".join(lines)
+        
+        # 3. Обновляем сообщение на отчет
+        bot.edit_message_text(text, chat_id, wait_msg.message_id, parse_mode="Markdown")
+        
+    except Exception as e:
+        print(f"Stock Error: {e}")
+        bot.edit_message_text(f"❌ Ошибка отчета: {e}", chat_id, wait_msg.message_id)
