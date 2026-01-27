@@ -420,56 +420,47 @@ def send_to_google(message):
         bot.send_message(user_id, "⚠️ Ошибка связи. Попробуйте еще раз:", reply_markup=markup)
 
 # ==========================================
-# 6. ГРУППА И АДМИНКА
+# 6. ГРУППА И АДМИНКА (ИСПРАВЛЕННАЯ)
 # ==========================================
 @bot.message_handler(func=lambda message: message.chat.type in ['group', 'supergroup'])
 def handle_group(message):
+    # ВАЖНО: Объявляем global в самом начале функции!
+    global IS_SHOP_OPEN 
+    
     uid = message.from_user.id
     
-    # АДМИН КОМАНДЫ
+    # --- БЛОК АДМИНИСТРАТОРА ---
     if uid in ADMIN_IDS:
         if message.text == "/menu":
             mk = types.ReplyKeyboardMarkup(resize_keyboard=True)
-            mk.add("📊 Остатки", "🟢 Открыть", "🔴 Закрыть")
-            st = "ОТКРЫТ" if IS_SHOP_OPEN else "ЗАКРЫТ"
-            bot.send_message(message.chat.id, f"Статус: {st}", reply_markup=mk)
+            btn1 = types.KeyboardButton("📊 Остатки")
+            btn2 = types.KeyboardButton("🟢 Открыть")
+            btn3 = types.KeyboardButton("🔴 Закрыть")
+            mk.add(btn1, btn2, btn3)
+            
+            st = "ОТКРЫТ ✅" if IS_SHOP_OPEN else "ЗАКРЫТ ❌"
+            bot.send_message(message.chat.id, f"Меню администратора.\nСтатус: {st}", reply_markup=mk)
             return
         
         if message.text == "🟢 Открыть":
-            global IS_SHOP_OPEN
             IS_SHOP_OPEN = True
-            bot.reply_to(message, "✅ Магазин открыт")
+            bot.reply_to(message, "✅ Магазин ОТКРЫТ! Прием заказов начат.")
             return
             
         if message.text == "🔴 Закрыть":
             IS_SHOP_OPEN = False
-            bot.reply_to(message, "⛔️ Магазин закрыт")
+            bot.reply_to(message, "⛔️ Магазин ЗАКРЫТ! Прием заказов остановлен.")
             return
             
         if message.text in ["📊 Остатки", "/stock"]:
             send_stock_report_message(message.chat.id)
             return
 
-    # ДЛЯ ВСЕХ
-    if message.text.lower().startswith('заказ'):
+    # --- БЛОК ДЛЯ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ ---
+    if message.text.lower().startswith('заказ') or message.text.startswith('/start'):
         mk = types.InlineKeyboardMarkup()
         mk.add(types.InlineKeyboardButton("Перейти в бот", url=f"https://t.me/{BOT_USERNAME}"))
-        bot.reply_to(message, "Жмите кнопку:", reply_markup=mk)
-
-def send_stock_report_message(chat_id):
-    bot.send_message(chat_id, "⏳ Загружаю...")
-    prods = get_products_from_google()
-    if not prods: 
-        bot.send_message(chat_id, "⚠️ Ошибка")
-        return
-        
-    lines = []
-    for p in prods:
-        st = p.get('stock', 0)
-        ic = "🟢" if st > 5 else "🟡" if st > 0 else "🔴"
-        lines.append(f"{ic} {p['name']}: {st}")
-    
-    bot.send_message(chat_id, "📦 **Склад:**\n" + "\n".join(lines), parse_mode="Markdown")
+        bot.reply_to(message, "Для оформления заказа нажмите кнопку:", reply_markup=mk)
 
 # ЗАПУСК
 keep_alive()
