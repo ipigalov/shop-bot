@@ -69,25 +69,30 @@ def keep_alive():
     t.start()
 
 # ==========================================
-# РАБОТА С GOOGLE
+# РАБОТА С GOOGLE (С АВТО-ПОВТОРОМ)
 # ==========================================
 def get_products_from_google():
-    try:
-        response = requests.get(GOOGLE_SCRIPT_URL, timeout=5)
-        if response.status_code == 200:
-            return response.json()
-        return []
-    except Exception as e:
-        print(f"Ошибка получения товаров: {e}")
-        return []
+    max_retries = 3  # Сколько раз пробовать
+    
+    for attempt in range(max_retries):
+        try:
+            # Увеличили timeout до 20 секунд! (Google бывает медленным)
+            response = requests.get(GOOGLE_SCRIPT_URL, timeout=20)
+            
+            if response.status_code == 200:
+                return response.json()
+            
+        except requests.exceptions.ReadTimeout:
+            # Если Гугл не успел ответить за 20 сек
+            print(f"⚠️ Попытка {attempt + 1}: Тайм-аут. Пробую снова...")
+            time.sleep(1) # Ждем 1 секунду и пробуем снова
+            
+        except Exception as e:
+            print(f"❌ Ошибка соединения: {e}")
+            return [] # Если ошибка другая (нет интернета), выходим сразу
 
-def find_product_info(short_name):
-    all_products = get_products_from_google()
-    for p in all_products:
-        if p['name'].startswith(short_name):
-            return p
-    return None
-
+    print("❌ Склад не ответил после 3 попыток.")
+    return []
 # ==========================================
 # 1. СТАРТ И МЕНЮ
 # ==========================================
