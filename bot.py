@@ -43,6 +43,13 @@ IS_SHOP_OPEN = True
 bot = telebot.TeleBot(BOT_TOKEN)
 user_data = {}
 
+# Функция безопасного удаления сообщения
+def safe_delete(chat_id, message_id):
+    try:
+        bot.delete_message(chat_id, message_id)
+    except:
+        pass
+
 # ==========================================
 # WEB-СЕРВЕР ДЛЯ RENDER
 # ==========================================
@@ -199,15 +206,15 @@ def handle_catalog_clicks(call):
 
     # Кнопки повтора и отмены
     if call.data == "retry_catalog":
-        try: bot.delete_message(chat_id, call.message.message_id); except: pass
+        safe_delete(chat_id, call.message.message_id)
         show_product_catalog(chat_id, "👇 Каталог:")
         return
     if call.data == "retry_checkout":
-        try: bot.delete_message(chat_id, call.message.message_id); except: pass
+        safe_delete(chat_id, call.message.message_id)
         send_to_google(call.message)
         return
     if call.data == "cancel_on_error":
-        try: bot.delete_message(chat_id, call.message.message_id); except: pass
+        safe_delete(chat_id, call.message.message_id)
         start_private(call.message)
         return
 
@@ -224,19 +231,19 @@ def handle_catalog_clicks(call):
     # Логика меню
     if call.data == "clear_cart":
         user_data[chat_id]['cart'] = {}
-        try: bot.delete_message(chat_id, call.message.message_id); except: pass
+        safe_delete(chat_id, call.message.message_id)
         show_product_catalog(chat_id, "Корзина очищена.")
 
     elif call.data == "checkout":
-        try: bot.delete_message(chat_id, call.message.message_id); except: pass
+        safe_delete(chat_id, call.message.message_id)
         show_confirm_menu(chat_id)
 
     elif call.data == "edit_cart_menu":
-        try: bot.delete_message(chat_id, call.message.message_id); except: pass
+        safe_delete(chat_id, call.message.message_id)
         show_edit_menu(chat_id)
 
     elif call.data == "back_to_catalog":
-        try: bot.delete_message(chat_id, call.message.message_id); except: pass
+        safe_delete(chat_id, call.message.message_id)
         show_product_catalog(chat_id, "Каталог:")
 
     # Добавление
