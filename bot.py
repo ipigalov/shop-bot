@@ -462,9 +462,7 @@ def handle_group(message):
         mk.add(types.InlineKeyboardButton("Перейти в бот", url=f"https://t.me/{BOT_USERNAME}"))
         bot.reply_to(message, "Для оформления заказа нажмите кнопку:", reply_markup=mk)
 
-# ЗАПУСК
-keep_alive()
-bot.infinity_polling()
+
 
 # ==========================================
 # ФУНКЦИЯ ОТПРАВКИ ОТЧЕТА (ЕЁ НЕ ХВАТАЛО)
@@ -501,3 +499,9 @@ def send_stock_report_message(chat_id):
     except Exception as e:
         print(f"Stock Error: {e}")
         bot.edit_message_text(f"❌ Ошибка отчета: {e}", chat_id, wait_msg.message_id)
+
+# ==========================================
+# 8. ЗАПУСК (ВСЕГДА В САМОМ КОНЦЕ)
+# ==========================================
+keep_alive()
+bot.infinity_polling()
