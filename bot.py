@@ -272,7 +272,7 @@ def handle_catalog_clicks(call):
             user_data[chat_id]['max_qty'] = stock
             user_data[chat_id]['mode'] = 'add'
             
-            msg = bot.send_message(chat_id, f"Товар: **{full_product['name']}**\nДоступно: {stock} шт.\nВведите количество:", parse_mode="Markdown")
+            msg = bot.send_message(chat_id, f"Товар: **{full_product['name']}**\nДоступно: {stock} шт.\nВведите количество в ШТУКАХ,\nкратное мин.заказу (указано в скобках после наименования):", parse_mode="Markdown")
             bot.register_next_step_handler(msg, save_quantity)
         else:
             bot.answer_callback_query(call.id, "Ошибка товара")
@@ -367,7 +367,7 @@ def show_confirm_menu(chat_id):
         total += s
         lines.append(f"{n} x {d['qty']} = {s}₽")
         
-    msg = f"🧾 **Чек:**\n" + "\n".join(lines) + f"\n\n💰 **Итого: {total}₽**"
+    msg = f"🧾 **Предварительный чек Вашего заказа:**\n" + "\n".join(lines) + f"\n\n💰 **Итого: {total}₽**"
     bot.send_message(chat_id, msg, reply_markup=markup, parse_mode="Markdown")
     bot.register_next_step_handler_by_chat_id(chat_id, handle_final_decision)
 
@@ -407,7 +407,7 @@ def send_to_google(message):
         response = requests.post(GOOGLE_SCRIPT_URL, json=payload, timeout=10)
         
         if response.status_code == 200:
-            bot.send_message(user_id, f"✅ Заказ #{payload['order_id']} принят!", parse_mode="Markdown")
+            bot.send_message(user_id, f"✅ Заказ #{payload['order_id']} принят!\n Дата и время выдачи товара в магазине \nсообщим дополнительно. Следите за информацией в группе", parse_mode="Markdown")
             
             # АЛЕРТ В ГРУППУ
             try:
