@@ -93,6 +93,15 @@ def get_products_from_google():
 
     print("❌ Склад не ответил после 3 попыток.")
     return []
+
+# --- ВОТ СЮДА ВСТАВЛЯЕМ ---
+def find_product_info(short_name):
+    all_products = get_products_from_google()
+    for p in all_products:
+        if p['name'].startswith(short_name):
+            return p
+    return None
+
 # ==========================================
 # 1. СТАРТ И МЕНЮ
 # ==========================================
@@ -134,8 +143,8 @@ def save_fio_and_show_catalog(message):
         return
 
     user_data[user_id] = {'fio': message.text, 'cart': {}}
-    bot.send_message(user_id, "🔄 Загружаю меню...")
-    show_product_catalog(user_id, "👇 Выберите товары:")
+    bot.send_message(user_id, "🔄 Загружаю список доступных к заказу товаров...")
+    show_product_catalog(user_id, "👇 Выберите товары нажатием на кнопку товара:")
 
 # ==========================================
 # 2. КАТАЛОГ
